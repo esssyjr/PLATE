@@ -13,7 +13,7 @@ import json
 app = FastAPI()
 
 # Load YOLOv8 model
-segmentation_model = YOLO('plate_segment_best.pt')
+segmentation_model = YOLO('plate_segment_best (3).pt')
 
 # Initialize OCR
 ocr = PaddleOCR(use_angle_cls=False, lang='en')
