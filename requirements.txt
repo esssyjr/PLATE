@@ -5,3 +5,4 @@ numpy
 ultralytics
 paddleocr
 opencv-python
+paddlepaddle
