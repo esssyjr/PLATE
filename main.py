@@ -1,12 +1,11 @@
 from fastapi import FastAPI, File, UploadFile, Form
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
 from PIL import Image
 import numpy as np
-from io import BytesIO
-from ultralytics import YOLO
-from paddleocr import PaddleOCR
 import uvicorn
+from ultralytics import YOLO
+import easyocr
+import io
 import json
 
 # Initialize FastAPI app
@@ -15,8 +14,8 @@ app = FastAPI()
 # Load YOLOv8 model
 segmentation_model = YOLO('plate_segment_best (3).pt')
 
-# Initialize OCR
-ocr = PaddleOCR(use_angle_cls=False, lang='en')
+# Initialize EasyOCR
+ocr = easyocr.Reader(['en'], gpu=False)
 
 # Example FRSC database
 vehicle_info_db = {
@@ -24,16 +23,16 @@ vehicle_info_db = {
     "XYZ789FG": {"owner": "Jane Smith", "vehicle": "Honda Accord, 2018, Black"},
 }
 
-# Extract plate number from OCR result
+# Extract plate number
 def extract_plate_number(ocr_results):
     plate_number = ""
-    for line in ocr_results:
-        for word in line:
-            plate_number += word[1][0] + " "
+    for result in ocr_results:
+        text = result[1]
+        plate_number += text + " "
     return plate_number.strip().replace(" ", "")
 
-# Segment and OCR
-def process_image(image: Image.Image):
+# Process image with YOLO + OCR
+def process_image(image):
     image_np = np.array(image.convert("RGB"))
     results = segmentation_model(image_np)
 
@@ -47,52 +46,63 @@ def process_image(image: Image.Image):
     x1, y1, x2, y2 = boxes[0]
     segmented_plate = image_np[int(y1):int(y2), int(x1):int(x2)]
 
-    ocr_results = ocr.ocr(segmented_plate)
+    ocr_results = ocr.readtext(segmented_plate)
     return extract_plate_number(ocr_results)
 
+# API endpoint
 @app.post("/detect")
 async def detect_plate_api(
     file: UploadFile = File(...),
-    mode: str = Form(...),
+    mode: str = Form(...),  # "Police" or "FRSC"
     suspected_numbers: str = Form(""),
-    frsc_data: str = Form("")
+    frsc_data: str = Form(""),
 ):
     try:
-        contents = await file.read()
-        image = Image.open(BytesIO(contents))
+        image = Image.open(io.BytesIO(await file.read()))
         plate_number = process_image(image)
 
         if not plate_number:
-            return JSONResponse(status_code=200, content={"status": "error", "message": "License Plate Number could not be extracted."})
+            return JSONResponse({"status": "error", "message": "License Plate Number could not be extracted."}, status_code=400)
 
-        # Police mode
         if mode == "Police":
             suspected_list = [num.strip().replace(" ", "") for num in suspected_numbers.split('\n') if num.strip()]
             if plate_number in suspected_list:
-                return {"status": "alert", "plate": plate_number, "message": "🚨 WANTED VEHICLE DETECTED! 🚨"}
+                return {
+                    "status": "success",
+                    "plate_number": plate_number,
+                    "message": "🚨 WANTED VEHICLE DETECTED!"
+                }
             else:
-                return {"status": "ok", "plate": plate_number, "message": "✅ Vehicle not in the wanted list."}
+                return {
+                    "status": "success",
+                    "plate_number": plate_number,
+                    "message": "✅ Vehicle not in the wanted list."
+                }
 
-        # FRSC mode
         elif mode == "FRSC":
             try:
-                plate_db = json.loads(frsc_data or "{}")
+                plate_db = json.loads(frsc_data) if frsc_data else vehicle_info_db
             except:
-                return {"status": "error", "message": "Invalid FRSC DB format. Please provide a valid dictionary."}
+                return JSONResponse({"status": "error", "message": "Invalid FRSC DB format. Provide a valid JSON dictionary."}, status_code=400)
 
             info = plate_db.get(plate_number)
             if info:
                 return {
-                    "status": "found",
-                    "plate": plate_number,
-                    "owner": info['owner'],
-                    "vehicle": info['vehicle']
+                    "status": "success",
+                    "plate_number": plate_number,
+                    "owner": info["owner"],
+                    "vehicle": info["vehicle"]
                 }
             else:
-                return {"status": "not_found", "plate": plate_number, "message": "No matching vehicle record found."}
+                return {
+                    "status": "success",
+                    "plate_number": plate_number,
+                    "message": "❌ No matching vehicle record found."
+                }
 
-        return {"status": "error", "message": "Unknown mode selected."}
+        return JSONResponse({"status": "error", "message": "Unknown mode selected."}, status_code=400)
 
     except Exception as e:
-        return JSONResponse(status_code=500, content={"status": "error", "message": str(e)})
+        return JSONResponse({"status": "error", "message": str(e)}, status_code=500)
 
+# Run with: uvicorn script_name:app --reload
