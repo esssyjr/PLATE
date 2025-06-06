@@ -3,6 +3,6 @@ uvicorn
 pillow
 numpy
 ultralytics
-paddleocr
+easyocr
+torch
 opencv-python
-paddlepaddle
