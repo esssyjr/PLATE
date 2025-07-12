@@ -114,6 +114,8 @@ Use this endpoint to submit an image and select your detection mode (`Police` or
   }
 }
 
+
+```
 ## 🧪 Sample Use Cases
 
 ### 🚓 Law Enforcement Mode (Police)
