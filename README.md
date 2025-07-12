@@ -1,4 +1,4 @@
-# 🇳🇬 Nigerian License Plate Detection and Recognition System (NLPDRS)
+# Nigerian License Plate Detection and Recognition System (NLPDRS)
 
 An intelligent AI-powered system for detecting and recognizing **Nigerian license plates** using computer vision and deep learning. Built with a custom dataset from Nigerian roads, **YOLOv8-nano** for segmentation, and **PaddleOCR** for character extraction, the system is optimized for real-time deployment in law enforcement, intelligent surveillance, and road safety monitoring.
 
